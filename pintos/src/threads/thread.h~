@@ -80,26 +80,24 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
-/*----- START -----*/
 struct thread
   {
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
-    uint8_t *stack;                     /* Saved stack pointer. */ 
-  
-    int64_t wakeup_ticks;		          /* tick till wake up (local) - store the time to wakeup */                
-    struct list_elem sleepelem;         /* List element for sleep threads list. */
-    int priority_original;              /* priority before donation. */
-    struct lock *waiting_lock;          /* lock of waiting thread */
-    struct list locks;                  /* list of locked threads */
+    uint8_t *stack;                     /* Saved stack pointer. */
+    int priority;                       /* Priority. */
+    struct list_elem allelem;           /* List element for all threads list. */
+/*@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@-edit*/
+    int64_t wakeup_tick;                /* tick till wake up*/
+    int init_priority;                  /* Store to init after donation */
+    struct lock *wait_on_lock;          /* address of lock struct */
+    struct list donations;              /* For multiple donation */
+    struct list_elem donation_elem;     /* For multiple donation */
     int nice;
     int recent_cpu;
 
-    int priority;                       /* Priority. */
-    struct list_elem allelem;           /* List element for all threads list. */
-    
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -111,8 +109,6 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-/*-----  END  -----*/
-
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -124,14 +120,6 @@ void thread_start (void);
 
 void thread_tick (void);
 void thread_print_stats (void);
-
-void thread_sleep (int64_t ticks); 
-
-void thread_wakeup(int64_t cur_tick);
-
-void thread_priority_donate(struct thread *target, int new_priority);
-
-
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
@@ -145,6 +133,10 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_sleep (int64_t ticks);
+void wakeup (int64_t tick);
+
+int64_t get_earliest_tick (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
@@ -152,6 +144,10 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+void test_max_priority(void);
+bool cmp_priority (const struct list_elem *a,
+                   const struct list_elem *b,
+                   void *aux UNUSED);
 
 void mlfqs_priority (struct thread *t);
 void mlfqs_recent_cpu (struct thread *t);
@@ -163,5 +159,9 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(struct thread *cur, int *priority);
 
 #endif /* threads/thread.h */
