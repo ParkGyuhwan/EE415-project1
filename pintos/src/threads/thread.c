@@ -344,7 +344,8 @@ thread_unblock (struct thread *t)
   
   /*When the thread is unblocked, it is inserted 
   to ready_list in the priority order.*/
-  if(thread_current() != idle_thread && thread_current()->priority < t->priority)
+  if(thread_current() != idle_thread
+       && thread_current()->priority < t->priority)
     {
       thread_yield();
     }
@@ -470,7 +471,8 @@ thread_set_priority (int new_priority)
   /* Set priority of the current thread & Reorder the ready_list */
   if(!list_empty(&ready_list))
     {
-      struct thread *next=list_entry(list_begin(&ready_list),struct thread, elem);
+      struct thread *next=list_entry(list_begin(&ready_list),
+                                     struct thread, elem);
       if (next != NULL && next->priority > new_priority)
 	{
 	  thread_yield();
@@ -491,15 +493,19 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  intr_disable();
+  thread_current ()->nice = nice;
+  intr_enable();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  intr_disable();
+  int nice = thread_current ()->nice;
+  intr_enable();
+  return nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -507,17 +513,22 @@ int
 thread_get_load_avg (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  intr_disable();
+  int r = fp_to_int_round(mult_mixed(load_avg, 100));
+  intr_enable();
+  return r;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  intr_disable();
+  int r = fp_to_int_round(mult_mixed(thread_current()->recent_cpu, 100));
+  intr_enable();
+  return r;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -720,13 +731,13 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 
 /*------------------------------------------------*/
 
 /*
  The fucntion cmp_priority compare the priority of 2 threads "a" and "b"
- Returns true if A is less than B, or false if A is greater than or equal to B. 
+ Returns true if A is less than B, or false if A is greater than/equal to B. 
 */
 
 static bool cmp_priority (const struct list_elem *a,
@@ -765,10 +776,9 @@ if (target == thread_current() && !list_empty(&ready_list))
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+// calculate priority
 void mlfqs_priority (struct thread *t)
 {
-/* 해당 스레드가 idle_thread 가 아닌지 검사 */
-/*priority계산식을 구현 (fixed_point.h의 계산함수 이용)*/
   if(t == idle_thread)
     return;
   int p1 = int_to_fp (PRI_MAX);
@@ -779,10 +789,9 @@ void mlfqs_priority (struct thread *t)
   t->priority = priority;
 }
 
+// calculate recent_cpu
 void mlfqs_recent_cpu (struct thread *t)
 {
-/* 해당 스레드가 idle_thread 가 아닌지 검사 */
-/*recent_cpu계산식을 구현 (fixed_point.h의 계산함수 이용)*/
   if(t == idle_thread)
     return;
   int p1 = mult_mixed (load_avg, 2);
@@ -794,9 +803,8 @@ void mlfqs_recent_cpu (struct thread *t)
   t->recent_cpu = recent_cpu;
 }
 
+// calculate load_avg
 void mlfqs_load_avg (void){
-/* load_avg계산식을 구현 (fixed_point.h의 계산함수 이용) */
-/* load_avg 는 0 보다 작아질 수 없다.*/
   int p1 = div_fp (int_to_fp (59), int_to_fp (60));
   int p2 = load_avg;
   int p3 = div_fp (int_to_fp (1), int_to_fp (60));
@@ -809,18 +817,17 @@ void mlfqs_load_avg (void){
     load_avg = 0;
 }
 
+// recent_cpu increment by 1
 void mlfqs_increment (void)
 {
-  /* 해당 스레드가 idle_thread 가 아닌지 검사 */
-  /* 현재 스레드의 recent_cpu 값을 1증가 시킨다. */
   if (thread_current() == idle_thread)
     return;
   thread_current ()->recent_cpu = add_mixed (thread_current ()->recent_cpu, 1);
 }
 
+// recaculate recent_cpu & priority
 void mlfqs_recalc (void)
 {
-/* 모든 thread의 recent_cpu와 priority값 재계산 한다. */
   struct list_elem *e;
   mlfqs_load_avg ();
   for (e = list_begin (&all_list); e != list_end (&all_list);
@@ -831,7 +838,4 @@ void mlfqs_recalc (void)
       mlfqs_priority (t);
     }
 }
-
-
-
 
